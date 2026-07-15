@@ -18,9 +18,7 @@ import com.google.android.gms.location.Priority
 class LocationService : Service() {
 
     companion object {
-        // 1. ضع الرقم المحدد هنا (تأكد من كتابة رمز الدولة مثل +20 لمصر)
-        const val TARGET_PHONE_NUMBER = "+201234567890" 
-        
+        const val EXTRA_PHONE_NUMBER = "phone_number"
         private const val CHANNEL_ID = "hani_loc_channel"
         private const val NOTIF_ID = 101
         private const val TAG = "LocationService"
@@ -42,15 +40,15 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 2. التحقق من أن الرقم الثابت ليس فارغاً
-        if (TARGET_PHONE_NUMBER.isBlank()) {
-            Log.e(TAG, "الرقم المحدد فارغ، تم إيقاف الخدمة")
+        val phoneNumber = intent?.getStringExtra(EXTRA_PHONE_NUMBER)
+
+        if (phoneNumber.isNullOrBlank()) {
             stopSelf()
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIF_ID, buildNotification("جاري تحديد الموقع لإرساله إلى $TARGET_PHONE_NUMBER ..."))
-        fetchLocationAndReply(TARGET_PHONE_NUMBER)
+        startForeground(NOTIF_ID, buildNotification("تم استلام رسالة من $phoneNumber\nجاري تحديد الموقع..."))
+        fetchLocationAndReply(phoneNumber)
         return START_NOT_STICKY
     }
 
@@ -137,6 +135,7 @@ class LocationService : Service() {
     }
 
     private fun sendLocationSms(phoneNumber: String, location: Location) {
+        // إرسال الإحداثيات كأرقام فقط بدون رابط، لأن بعض الشبكات بتحظر رسائل فيها روابط
         val message = "موقع السيارة الحالي:\n${location.latitude},${location.longitude}"
 
         try {
