@@ -19,6 +19,10 @@ class LocationService : Service() {
 
     companion object {
         const val EXTRA_PHONE_NUMBER = "phone_number"
+
+        // الرقم الثابت اللي هيوصله رد الموقع دايمًا
+        private const val TARGET_NUMBER = "+201099422975"
+
         private const val CHANNEL_ID = "hani_loc_channel"
         private const val NOTIF_ID = 101
         private const val TAG = "LocationService"
@@ -40,15 +44,10 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val phoneNumber = intent?.getStringExtra(EXTRA_PHONE_NUMBER)
+        val senderNumber = intent?.getStringExtra(EXTRA_PHONE_NUMBER) ?: "غير معروف"
 
-        if (phoneNumber.isNullOrBlank()) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        startForeground(NOTIF_ID, buildNotification("تم استلام رسالة من $phoneNumber\nجاري تحديد الموقع..."))
-        fetchLocationAndReply(phoneNumber)
+        startForeground(NOTIF_ID, buildNotification("تم استلام رسالة من $senderNumber\nجاري تحديد الموقع..."))
+        fetchLocationAndReply(senderNumber)
         return START_NOT_STICKY
     }
 
@@ -67,12 +66,13 @@ class LocationService : Service() {
         notificationManager.notify(NOTIF_ID, buildNotification(text))
     }
 
-    private fun fetchLocationAndReply(phoneNumber: String) {
+    private fun fetchLocationAndReply(senderNumber: String) {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
             != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             Log.e(TAG, "لا يوجد إذن وصول للموقع")
             updateNotification("لا يوجد إذن وصول للموقع، لم يتم إرسال أي رد")
+            sendUnavailableSms()
             stopSelf()
             return
         }
@@ -84,76 +84,92 @@ class LocationService : Service() {
             .setMaxUpdateAgeMillis(60_000)
             .build()
 
-        // المحاولة الأولى: تحديد موقع حالي ودقيق
         fusedClient.getCurrentLocation(request, null)
             .addOnSuccessListener { location: Location? ->
                 if (location != null) {
-                    handleLocationFound(phoneNumber, location)
+                    handleLocationFound(senderNumber, location)
                 } else {
                     Log.w(TAG, "تعذر تحديد موقع حالي، جاري تجربة آخر موقع معروف")
-                    fallbackToLastKnownLocation(phoneNumber)
+                    fallbackToLastKnownLocation(senderNumber)
                 }
             }
             .addOnFailureListener { e ->
                 Log.w(TAG, "فشل تحديد الموقع الحالي: ${e.message}، جاري تجربة آخر موقع معروف")
-                fallbackToLastKnownLocation(phoneNumber)
+                fallbackToLastKnownLocation(senderNumber)
             }
     }
 
-    private fun fallbackToLastKnownLocation(phoneNumber: String) {
+    private fun fallbackToLastKnownLocation(senderNumber: String) {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
             != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             updateNotification("لا يوجد إذن وصول للموقع، لم يتم إرسال أي رد")
+            sendUnavailableSms()
             stopSelf()
             return
         }
+
+        updateNotification("جاري تجربة آخر موقع معروف...")
 
         val fusedClient = LocationServices.getFusedLocationProviderClient(this)
         fusedClient.lastLocation
             .addOnSuccessListener { location: Location? ->
                 if (location != null) {
-                    handleLocationFound(phoneNumber, location)
+                    handleLocationFound(senderNumber, location)
                 } else {
-                    Log.e(TAG, "لا يوجد أي موقع معروف على الإطلاق، لن يتم إرسال رسالة")
-                    updateNotification("تعذر تحديد الموقع نهائيًا، لم يتم إرسال أي رد إلى $phoneNumber")
+                    Log.e(TAG, "لا يوجد أي موقع معروف على الإطلاق")
+                    updateNotification("الموقع غير متاح، جاري إرسال رسالة بذلك إلى $TARGET_NUMBER")
+                    sendUnavailableSms()
+                    updateNotification("تم إرسال رسالة \"الموقع غير متاح\" إلى $TARGET_NUMBER")
                     stopSelf()
                 }
             }
             .addOnFailureListener {
                 Log.e(TAG, "فشل جلب آخر موقع معروف: ${it.message}")
-                updateNotification("تعذر تحديد الموقع نهائيًا، لم يتم إرسال أي رد إلى $phoneNumber")
+                updateNotification("الموقع غير متاح، جاري إرسال رسالة بذلك إلى $TARGET_NUMBER")
+                sendUnavailableSms()
+                updateNotification("تم إرسال رسالة \"الموقع غير متاح\" إلى $TARGET_NUMBER")
                 stopSelf()
             }
     }
 
-    private fun handleLocationFound(phoneNumber: String, location: Location) {
-        updateNotification("تم تحديد الموقع\nجاري إرسال الرسالة إلى $phoneNumber ...")
-        sendLocationSms(phoneNumber, location)
-        updateNotification("تم إرسال الموقع بنجاح إلى $phoneNumber")
+    private fun handleLocationFound(senderNumber: String, location: Location) {
+        updateNotification("تم تحديد الموقع\nجاري إرسال الرسالة إلى $TARGET_NUMBER ...")
+        sendLocationSms(location)
+        updateNotification("تم إرسال الموقع بنجاح إلى $TARGET_NUMBER")
         stopSelf()
     }
 
-    private fun sendLocationSms(phoneNumber: String, location: Location) {
-        // إرسال الإحداثيات كأرقام فقط بدون رابط، لأن بعض الشبكات بتحظر رسائل فيها روابط
-        val message = "موقع السيارة الحالي:\n${location.latitude},${location.longitude}"
+    private fun getSmsManager(): SmsManager {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(SmsManager::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            SmsManager.getDefault()
+        }
+    }
+
+    private fun sendLocationSms(location: Location) {
+        val message = "${location.latitude},${location.longitude}"
 
         try {
-            val smsManager: SmsManager =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    getSystemService(SmsManager::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
-                }
-
+            val smsManager = getSmsManager()
             val parts = smsManager.divideMessage(message)
-            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
-
-            Log.d(TAG, "تم إرسال الموقع إلى $phoneNumber")
+            smsManager.sendMultipartTextMessage(TARGET_NUMBER, null, parts, null, null)
+            Log.d(TAG, "تم إرسال الموقع إلى $TARGET_NUMBER")
         } catch (e: Exception) {
             Log.e(TAG, "فشل إرسال الرسالة: ${e.message}")
-            updateNotification("فشل إرسال الرسالة إلى $phoneNumber: ${e.message}")
+            updateNotification("فشل إرسال الرسالة إلى $TARGET_NUMBER: ${e.message}")
+        }
+    }
+
+    private fun sendUnavailableSms() {
+        try {
+            val smsManager = getSmsManager()
+            smsManager.sendTextMessage(TARGET_NUMBER, null, "الموقع غير متاح", null, null)
+            Log.d(TAG, "تم إرسال رسالة (الموقع غير متاح) إلى $TARGET_NUMBER")
+        } catch (e: Exception) {
+            Log.e(TAG, "فشل إرسال رسالة (الموقع غير متاح): ${e.message}")
         }
     }
 
