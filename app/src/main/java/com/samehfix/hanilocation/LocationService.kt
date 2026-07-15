@@ -135,7 +135,6 @@ class LocationService : Service() {
     }
 
     private fun sendLocationSms(phoneNumber: String, location: Location) {
-       // إرسال الإحداثيات فقط بدون أي نص إضافي وبدون رابط
         val message = "${location.latitude},${location.longitude}"
         try {
             val smsManager: SmsManager =
