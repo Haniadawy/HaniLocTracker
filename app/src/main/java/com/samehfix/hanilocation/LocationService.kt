@@ -147,7 +147,7 @@ class LocationService : Service() {
                 }
 
             val parts = smsManager.divideMessage(message)
-            smsManager.sendMultipartTextMessage(+201099422975, null, parts, null, null)
+            smsManager.sendMultipartTextMessage($phoneNumber, null, parts, null, null)
 
             Log.d(TAG, "تم إرسال الموقع إلى $phoneNumber")
         } catch (e: Exception) {
