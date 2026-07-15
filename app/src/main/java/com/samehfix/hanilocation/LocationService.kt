@@ -18,7 +18,9 @@ import com.google.android.gms.location.Priority
 class LocationService : Service() {
 
     companion object {
-        const val EXTRA_PHONE_NUMBER = "phone_number"
+        // 1. ضع الرقم المحدد هنا (تأكد من كتابة رمز الدولة مثل +20 لمصر)
+        const val TARGET_PHONE_NUMBER = "+201234567890" 
+        
         private const val CHANNEL_ID = "hani_loc_channel"
         private const val NOTIF_ID = 101
         private const val TAG = "LocationService"
@@ -40,15 +42,15 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val phoneNumber = intent?.getStringExtra(EXTRA_PHONE_NUMBER)
-
-        if (phoneNumber.isNullOrBlank()) {
+        // 2. التحقق من أن الرقم الثابت ليس فارغاً
+        if (TARGET_PHONE_NUMBER.isBlank()) {
+            Log.e(TAG, "الرقم المحدد فارغ، تم إيقاف الخدمة")
             stopSelf()
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIF_ID, buildNotification("تم استلام رسالة من $phoneNumber\nجاري تحديد الموقع..."))
-        fetchLocationAndReply(phoneNumber)
+        startForeground(NOTIF_ID, buildNotification("جاري تحديد الموقع لإرساله إلى $TARGET_PHONE_NUMBER ..."))
+        fetchLocationAndReply(TARGET_PHONE_NUMBER)
         return START_NOT_STICKY
     }
 
@@ -135,7 +137,8 @@ class LocationService : Service() {
     }
 
     private fun sendLocationSms(phoneNumber: String, location: Location) {
-        val message = "${location.latitude},${location.longitude}"
+        val message = "موقع السيارة الحالي:\n${location.latitude},${location.longitude}"
+
         try {
             val smsManager: SmsManager =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -146,7 +149,7 @@ class LocationService : Service() {
                 }
 
             val parts = smsManager.divideMessage(message)
-            smsManager.sendMultipartTextMessage($phoneNumber, null, parts, null, null)
+            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
 
             Log.d(TAG, "تم إرسال الموقع إلى $phoneNumber")
         } catch (e: Exception) {
