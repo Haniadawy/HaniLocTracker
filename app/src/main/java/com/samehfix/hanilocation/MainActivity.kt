@@ -95,5 +95,20 @@ class MainActivity : AppCompatActivity() {
         } else {
             "⚠️ لازم تمنح كل الأذونات المطلوبة عشان التطبيق يشتغل"
         }
+
+        if (granted) {
+            scheduleLowBatteryCheck()
+        }
+    }
+
+    private fun scheduleLowBatteryCheck() {
+        val request = PeriodicWorkRequestBuilder<LowBatteryWorker>(6, TimeUnit.HOURS)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "low_battery_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 }
