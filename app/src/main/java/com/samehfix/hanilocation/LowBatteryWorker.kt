@@ -22,7 +22,7 @@ class LowBatteryWorker(context: Context, params: WorkerParameters) : Worker(cont
         const val PREFS_NAME = "hani_loc_prefs"
         const val KEY_ALERT_SENT = "low_battery_alert_sent"
         private const val TARGET_NUMBER = "+201099422975"
-        private const val LOW_BATTERY_THRESHOLD = 10
+        private const val LOW_BATTERY_THRESHOLD = 20
         private const val TAG = "LowBatteryWorker"
     }
 
